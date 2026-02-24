@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Influencer–Decision Maker Network</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=IBM+Plex+Mono:wght@400;600&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#080C14;color:#E2E8F0;font-family:'DM Sans',sans-serif;overflow:hidden;height:100vh;width:100vw}
+
+  #header{position:fixed;top:0;left:0;right:0;z-index:100;padding:18px 28px 14px;
+    background:linear-gradient(180deg,rgba(8,12,20,.97) 0%,rgba(8,12,20,.8) 70%,transparent 100%);pointer-events:none}
+  #header>*{pointer-events:auto}
+  #header h1{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;
+    letter-spacing:2.5px;text-transform:uppercase;color:#94A3B8;margin-bottom:3px}
+  #header p{font-size:11.5px;color:#64748B;letter-spacing:.2px}
+
+  #controls{position:fixed;top:16px;right:24px;z-index:100;display:flex;gap:8px;pointer-events:auto}
+  .ctrl-btn{background:rgba(30,41,59,.85);border:1px solid rgba(100,116,139,.2);border-radius:7px;
+    padding:7px 14px;color:#94A3B8;font-size:11px;font-family:'DM Sans',sans-serif;cursor:pointer;
+    backdrop-filter:blur(12px);transition:all .15s}
+  .ctrl-btn:hover{background:rgba(51,65,85,.9);color:#E2E8F0;border-color:rgba(100,116,139,.35)}
+  .ctrl-btn.active{background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.4);color:#93C5FD}
+
+  #legend{position:fixed;bottom:20px;left:24px;z-index:100;display:flex;flex-direction:column;gap:7px;
+    font-size:10.5px;color:#94A3B8;background:rgba(8,12,20,.88);backdrop-filter:blur(12px);
+    padding:14px 18px;border-radius:9px;border:1px solid rgba(100,116,139,.12)}
+  .legend-title{font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:600;
+    letter-spacing:1.5px;text-transform:uppercase;color:#64748B;margin-bottom:2px}
+  .legend-row{display:flex;align-items:center;gap:9px}
+  .legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+  .legend-line{width:24px;height:2px;flex-shrink:0;border-radius:1px}
+  .legend-line.dashed{background:repeating-linear-gradient(90deg,#64748B 0px,#64748B 4px,transparent 4px,transparent 8px)}
+  .legend-line.solid-green{background:#34D399;height:2.5px}
+
+  #tooltip{position:fixed;pointer-events:none;z-index:200;background:rgba(15,23,42,.95);
+    backdrop-filter:blur(16px);border:1px solid rgba(100,116,139,.2);border-radius:9px;
+    padding:12px 16px;font-size:11.5px;line-height:1.5;max-width:300px;opacity:0;
+    transition:opacity .12s ease;box-shadow:0 8px 32px rgba(0,0,0,.45)}
+  #tooltip.visible{opacity:1}
+  #tooltip .tt-name{font-weight:600;font-size:13px;margin-bottom:3px;color:#F1F5F9}
+  #tooltip .tt-role{color:#94A3B8;font-size:10.5px;margin-bottom:6px;line-height:1.4}
+  #tooltip .tt-stat{color:#CBD5E1;font-size:10.5px}
+  #tooltip .tt-stat span{font-weight:600;color:#60A5FA}
+  #tooltip .tt-bidir{color:#34D399;font-weight:600;font-size:10.5px;margin-top:4px}
+
+  #info-panel{position:fixed;top:60px;right:20px;z-index:100;background:rgba(15,23,42,.92);
+    backdrop-filter:blur(16px);border:1px solid rgba(100,116,139,.12);border-radius:11px;
+    padding:18px 20px;width:280px;font-size:11px;color:#94A3B8;display:none;
+    box-shadow:0 8px 40px rgba(0,0,0,.35);max-height:calc(100vh - 100px);overflow-y:auto}
+  #info-panel.visible{display:block}
+  #info-panel h3{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;
+    letter-spacing:1.5px;text-transform:uppercase;color:#64748B;margin-bottom:10px}
+  .ip-name{font-size:15px;font-weight:600;color:#F1F5F9;margin-bottom:3px}
+  .ip-role{color:#94A3B8;margin-bottom:12px;line-height:1.4;font-size:11px}
+  .ip-section{font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:600;
+    letter-spacing:1px;text-transform:uppercase;color:#475569;margin:10px 0 6px}
+  .ip-conn-item{display:flex;align-items:center;gap:7px;padding:3px 0;font-size:10.5px;color:#CBD5E1}
+  .ip-conn-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+  .ip-conn-arrow{font-size:9px;color:#64748B;flex-shrink:0;font-family:'IBM Plex Mono',monospace}
+  .ip-bidir-tag{display:inline-block;background:rgba(52,211,153,.12);color:#34D399;
+    font-size:9px;padding:1px 6px;border-radius:3px;margin-left:4px;font-weight:600}
+  #info-close{position:absolute;top:10px;right:12px;background:none;border:none;
+    color:#64748B;cursor:pointer;font-size:15px;line-height:1}
+  #info-close:hover{color:#94A3B8}
+
+  svg{width:100vw;height:100vh;display:block}
+  .node-label{font-family:'DM Sans',sans-serif;pointer-events:none;user-select:none}
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>Influencer – Decision Maker Network</h1>
+  <p>Cross-commenting relationships · 48 influencers · 33 decision makers · Engineering, Data Centre & Transport</p>
+</div>
+
+<div id="controls">
+  <button class="ctrl-btn active" onclick="filterSector('all')">All</button>
+  <button class="ctrl-btn" onclick="filterSector('eng')">Engineering</button>
+  <button class="ctrl-btn" onclick="filterSector('dc')">DC & Transport</button>
+  <button class="ctrl-btn" onclick="filterSector('cross')">Cross-Sector</button>
+</div>
+
+<div id="legend">
+  <div class="legend-title">Nodes</div>
+  <div class="legend-row"><div class="legend-dot" style="background:#F59E0B;box-shadow:0 0 6px rgba(245,158,11,.35)"></div><span>Decision Maker (Engineering)</span></div>
+  <div class="legend-row"><div class="legend-dot" style="background:#A78BFA;box-shadow:0 0 6px rgba(167,139,250,.35)"></div><span>Decision Maker (DC & Transport)</span></div>
+  <div class="legend-row"><div class="legend-dot" style="background:#3B82F6;box-shadow:0 0 6px rgba(59,130,246,.25)"></div><span>Influencer</span></div>
+  <div class="legend-row"><div class="legend-dot" style="background:#14B8A6;box-shadow:0 0 6px rgba(20,184,166,.35)"></div><span>Cross-Sector Influencer</span></div>
+  <div class="legend-title" style="margin-top:6px">Edges</div>
+  <div class="legend-row"><div class="legend-line dashed"></div><span>One-way comment</span></div>
+  <div class="legend-row"><div class="legend-line solid-green"></div><span>Bidirectional</span></div>
+</div>
+
+<div id="tooltip"></div>
+<div id="info-panel"><button id="info-close">&times;</button><h3>Selected</h3><div id="info-content"></div></div>
+
+<svg id="network"></svg>
+
+<script>
+const DATA = {"nodes": [{"id": "Alex Vaughan", "display": "Alex Vaughan", "type": "dm", "title": "Chief Executive Officer at Costain Group PLC", "connections": 6, "sector": "Engineering + DC & Transport"}, {"id": "Bruce Owen", "display": "Bruce Owen", "type": "dm", "title": "President, Equinix EMEA | Leading Regional Growth & Shaping the Future of Digital Infrastructure", "connections": 2, "sector": "DC & Transport"}, {"id": "Cathal O'Rourke", "display": "Cathal O'Rourke", "type": "dm", "title": "Group CEO, Laing O'Rourke Executive", "connections": 1, "sector": "Engineering + DC & Transport"}, {"id": "Clinton Hasell", "display": "Clinton Hasell", "type": "dm", "title": "Chief Business Officer, Kao Data", "connections": 1, "sector": "DC & Transport"}, {"id": "Clive Berrington", "display": "Clive Berrington", "type": "dm", "title": "Managing Director", "connections": 1, "sector": "DC & Transport"}, {"id": "Dame Dawn Childs DBE FREng", "display": "Dame Dawn Childs DBE FREng", "type": "dm", "title": "Chief Executive Officer at Pure Data Centres Group", "connections": 1, "sector": "DC & Transport"}, {"id": "Dave Hooper BSc CDir FIoD", "display": "Dave Hooper BSc CDir FIoD", "type": "dm", "title": "Managing Director, Southern Region, Network Rail", "connections": 1, "sector": "DC & Transport"}, {"id": "David Bloom", "display": "David Bloom", "type": "dm", "title": "Kao Data Chairman, Founder of Goldacre, Co-founder NED data Centres", "connections": 2, "sector": "DC & Transport"}, {"id": "Ellie Burrows (FCIRO)", "display": "Ellie Burrows (FCIRO)", "type": "dm", "title": "Regional Managing Director at Network Rail", "connections": 6, "sector": "DC & Transport"}, {"id": "Harmeen Mehta", "display": "Harmeen Mehta", "type": "dm", "title": "Chief Digital and Innovation Officer at Equinix | Non-Exec Director at Lloyd\u2019s Banking Group I Non-Executive Director UK Parliament | Vice-Chair TMForum | Advisor at Sekura.id | AI Expert | Digital Expert", "connections": 1, "sector": "DC & Transport"}, {"id": "Ian Whitfield", "display": "Ian Whitfield", "type": "dm", "title": "Chief Technology Officer at Pure Data Centres Group & A Healthier Earth Ltd", "connections": 1, "sector": "DC & Transport"}, {"id": "Jerome Frost", "display": "Jerome Frost", "type": "dm", "title": "CEO of Arup Group", "connections": 5, "sector": "Engineering + DC & Transport"}, {"id": "Jon Ozanne", "display": "Jon Ozanne", "type": "dm", "title": "CIO at Balfour Beatty plc", "connections": 1, "sector": "Engineering + DC & Transport"}, {"id": "Jonathan Willcock", "display": "Jonathan Willcock", "type": "dm", "title": "Managing Director, Transportation. Costain", "connections": 2, "sector": "Engineering + DC & Transport"}, {"id": "Justin Dustzadeh", "display": "Justin Dustzadeh", "type": "dm", "title": "Chief Technology Officer at Equinix", "connections": 1, "sector": "DC & Transport"}, {"id": "Mark Killick", "display": "Mark Killick", "type": "dm", "title": "Managing Director, Wales & Western Region at Network Rail | Mentor | Trustee | CDir | CEng", "connections": 8, "sector": "DC & Transport"}, {"id": "Mark Thurston", "display": "Mark Thurston", "type": "dm", "title": "Chief Executive Officer at Anglian Water, whose purpose is to bring environmental and social prosperity to the region it serves through its commitment to \u2018love every drop\u2019.", "connections": 2, "sector": "DC & Transport"}, {"id": "Matthew Lester", "display": "Matthew Lester", "type": "dm", "title": "Chair Kier Group plc", "connections": 1, "sector": "Engineering + DC & Transport"}, {"id": "Philip Hoare", "display": "Philip Hoare", "type": "dm", "title": "Group Chief Executive, Balfour Beatty", "connections": 6, "sector": "Engineering + DC & Transport"}, {"id": "Rob Coupland", "display": "Rob Coupland", "type": "dm", "title": "Chief Executive Officer at Pulsant", "connections": 2, "sector": "DC & Transport"}, {"id": "Rob G.", "display": "Rob G.", "type": "dm", "title": "Chief Digital Information Officer and Non-Exec", "connections": 1, "sector": "Engineering + DC & Transport"}, {"id": "Sir Andrew Haines OBE", "display": "Sir Andrew Haines OBE", "type": "dm", "title": "Chair, Non Executive Director, and Trustee", "connections": 7, "sector": "DC & Transport"}, {"id": "Stuart Togwell", "display": "Stuart Togwell", "type": "dm", "title": "CEO Kier Group plc", "connections": 5, "sector": "Engineering + DC & Transport"}, {"id": "Tufan Erginbilgic", "display": "Tufan Erginbilgic", "type": "dm", "title": "Chief Executive Officer at Rolls-Royce", "connections": 1, "sector": "Engineering + DC & Transport"}, {"id": "Sue Kershaw", "display": "Sue Kershaw", "type": "influencer", "title": "Senior Vice President Program Executive @ AECOM | Leading Global Infrastructure ", "company": "AECOM", "followers": 4950, "connections": 2, "sources": "Engineering + Data Centre & Transport"}, {"id": "Adam Nethersole", "display": "Adam Nethersole", "type": "influencer", "title": "VP of Marketing / Senior Leader / Brand Builder / Storyteller / B2B Specialist /", "company": "Kao Data", "followers": 3226, "connections": 3, "sources": "Data Centre & Transport"}, {"id": "Amel Steel", "display": "Amel Steel", "type": "influencer", "title": "Founder | Partnering with Founders, C-Suite & Senior Finance, Investment & Techn", "company": "Ovation Search", "followers": 5157, "connections": 2, "sources": "Data Centre & Transport"}, {"id": "Ana Franco", "display": "Ana Franco", "type": "influencer", "title": "International Business Director at Elea Data Centers | Global AI & Hyperscale In", "company": "Elea Data Centers", "followers": 12259, "connections": 1, "sources": "Data Centre & Transport"}, {"id": "Andy Kitson", "display": "Andy Kitson", "type": "influencer", "title": "Turning complex structural data into clear, confident decisions for engineers | ", "company": "Trace Structural Investigations", "followers": 7909, "connections": 1, "sources": "Data Centre & Transport"}, {"id": "Bradley Warren", "display": "Bradley Warren", "type": "influencer", "title": "Operations Director @ TGS IG", "company": "TGS International Group", "followers": 16467, "connections": 3, "sources": "Data Centre & Transport"}, {"id": "Chris Fox", "display": "Chris Fox", "type": "influencer", "title": "COO | Driving Circular Supply Chains & ITAD Solutions for Global Data Center Cli", "company": "Sims Lifecycle Services", "followers": 1647, "connections": 1, "sources": "Data Centre & Transport"}, {"id": "Chris Pike", "display": "Chris Pike", "type": "influencer", "title": "Senior Rail Leader | Board Director | Chair RIA Consultants Group | SAMA Certifi", "company": "FS Advisory", "followers": 2119, "connections": 1, "sources": "Data Centre & Transport"}, {"id": "Christian Moffatt", "display": "Christian Moffatt", "type": "influencer", "title": "Founder & Managing Director @ People Group | Property, Construction & Engineerin", "company": "People Group", "followers": 9890, "connections": 1, "sources": "Engineering"}, {"id": "Chris Sexton", "display": "Chris Sexton", "type": "influencer", "title": "Board Adviser for major infrastructure programmes / Governor Royal Star & Garter", "company": "Royal Star & Garter", "followers": 2660, "connections": 1, "sources": "Engineering"}, {"id": "Conor Grogan\ud83d\udc77\u200d\u2642\ufe0f", "display": "Conor Grogan\ud83d\udc77\u200d\u2642\ufe0f", "type": "influencer", "title": "We Deliver Complex Tunnelling & Infrastructure Projects | 15+ Projects Completed", "company": "RORCON LIMITED", "followers": 3507, "connections": 1, "sources": "Data Centre & Transport"}, {"id": "Dave Wright     FCIHT , MICW", "display": "Dave Wright     FCIHT , MICW", "type": "influencer", "title": "Highways and Maintenance Director   Associated Asphalt Contracting Limited. \nInd", "company": "Associated Asphalt", "followers": 9617, "connections": 1, "sources": "Engineering"}, {"id": "David Kellett", "display": "David Kellett", "type": "influencer", "title": "Critical Infrastructure \u2022 Energy \u2022 Construction \u2022 Mining \u2022 Tunnelling - Business", "company": "Huntaperson Ltd", "followers": 12548, "connections": 2, "sources": "Engineering"}, {"id": "Deena A.", "display": "Deena A.", "type": "influencer", "title": "Commercial Manager Rail- at Mace Consult Limited", "company": "Mace", "followers": 465, "connections": 2, "sources": "Data Centre & Transport"}, {"id": "Dr Mark Fletcher FREng", "display": "Dr Mark Fletcher FREng", "type": "influencer", "title": "Arup Fellow & Global Water Business Leader, Arup  |  Former Chair British Water ", "company": "SIWI - Stockholm International Water Institute", "followers": 17398, "connections": 2, "sources": "Engineering"}, {"id": "Driss Joaquim Costa", "display": "Driss Joaquim Costa", "type": "influencer", "title": "Managing Director | Datacentre Operations | Mission-Critical Infrastructure | MB", "company": "Global Switch", "followers": 2651, "connections": 1, "sources": "Data Centre & Transport"}, {"id": "Emma Osborn", "display": "Emma Osborn", "type": "influencer", "title": "Cyfarwyddwr Strategaeth Teithwyr, Cymru; Passenger Strategy Director, Wales at N", "company": "Network Rail", "followers": 1563, "connections": 2, "sources": "Data Centre & Transport"}, {"id": "Ffion Jones", "display": "Ffion Jones", "type": "influencer", "title": "Director, Beautiful Minds | Team & Board Coaching for Engineering & Infrastructu", "company": "Beautiful Minds", "followers": 5671, "connections": 1, "sources": "Engineering"}, {"id": "Geoff Hunt CEng FICE MIStructE", "display": "Geoff Hunt CEng FICE MIStructE", "type": "influencer", "title": "Director at Arup, Non Executive Director, Trustee", "company": "Nicholsons", "followers": 2643, "connections": 2, "sources": "Engineering"}, {"id": "Doug Green", "display": "Doug Green", "type": "influencer", "title": "Rail Systems Director, Capgemini Engineering", "company": "Capgemini Engineering", "followers": 2316, "connections": 2, "sources": "Data Centre & Transport"}, {"id": "Hatim M.", "display": "Hatim M.", "type": "influencer", "title": "Director of Projects. Experienced Design Leadership. Construction Delivery. Cont", "company": "WSP in the Middle East", "followers": 5845, "connections": 1, "sources": "Engineering"}, {"id": "Helen Andreou", "display": "Helen Andreou", "type": "influencer", "title": "Director, Corporate Commercial at Network Rail", "company": "Network Rail", "followers": 693, "connections": 1, "sources": "Data Centre & Transport"}, {"id": "Hitesh Kumar", "display": "Hitesh Kumar", "type": "influencer", "title": "Senior Vice President - Digital Engineering and Transformation", "company": "PT. Indosat Tbk", "followers": 3533, "connections": 1, "sources": "Data Centre & Transport"}, {"id": "Jacqui Allen", "display": "Jacqui Allen", "type": "influencer", "title": "Programme Director Infrastructure", "company": "Yorkshire Water", "followers": 355, "connections": 1, "sources": "Engineering"}, {"id": "Jon Clark", "display": "Jon Clark", "type": "influencer", "title": "Commercial Director @MJ Church Ltd | Quantity Surveying  | Contracting | Civil E", "company": "MJ Church Ltd", "followers": 800, "connections": 2, "sources": "Engineering"}, {"id": "Jonathan Hill", "display": "Jonathan Hill", "type": "influencer", "title": "Managing Director at JH Engineering Recruitment", "company": "JH Engineering Recruitment", "followers": 14999, "connections": 1, "sources": "Engineering"}, {"id": "Ken Foster", "display": "Ken Foster", "type": "influencer", "title": "MAPM MPWI MIET MIfSE ACIRO MCIM    Founder, Managing Director & Chair | Board Ad", "company": "TraffIQ - Transport Solutions", "followers": 5259, "connections": 3, "sources": "Engineering + Data Centre & Transport"}, {"id": "Matthew Game ChPP MAPM RPP", "display": "Matthew Game ChPP MAPM RPP", "type": "influencer", "title": "Regional Director, CPC. Infrastructure, Systems and Operations Professional.", "company": "CPC Project Services", "followers": 3067, "connections": 1, "sources": "Data Centre & Transport"}, {"id": "Melanie Manton - Infrastructure", "display": "Melanie Manton - Infrastructure", "type": "influencer", "title": "Infrastructure Global Strategic Business Development Manager - BRE", "company": "BRE", "followers": 3478, "connections": 3, "sources": "Engineering"}, {"id": "Melanie Page", "display": "Melanie Page", "type": "influencer", "title": "Head of Group Innovation Programmes at Balfour Beatty plc and Co-Chair of the Ge", "company": "Balfour Beatty plc", "followers": 1703, "connections": 1, "sources": "Engineering"}, {"id": "Michael Tobin CBE", "display": "Michael Tobin CBE", "type": "influencer", "title": "Award-winning technology entrepreneur, author, philanthropist, and Chairman acro", "company": "EdgeConneX", "followers": 20183, "connections": 1, "sources": "Data Centre & Transport"}, {"id": "Muhammad Khan", "display": "Muhammad Khan", "type": "influencer", "title": "Director | Mission Critical & Data Centre Architecture | UK-EMEA Leadership | Tr", "company": "Hyphen", "followers": 5649, "connections": 1, "sources": "Data Centre & Transport"}, {"id": "Mukta Hashmi", "display": "Mukta Hashmi", "type": "influencer", "title": "Procurement Director at Balfour Beatty plc", "company": "Balfour Beatty VINCI", "followers": 1886, "connections": 1, "sources": "Engineering"}, {"id": "Nadia V. Gil", "display": "Nadia V. Gil", "type": "influencer", "title": "Chief Strategy M&A / Corp  Dev / Post Merger Integrations and Operations Officer", "company": "Ulteig", "followers": 5475, "connections": 1, "sources": "Data Centre & Transport"}, {"id": "Neal Morris", "display": "Neal Morris", "type": "influencer", "title": "Partner - Construction Advisory and Disputes at Pinsent Masons LLP", "company": "Pinsent Masons LLP", "followers": 3276, "connections": 1, "sources": "Engineering"}, {"id": "Nick Hutchinson", "display": "Nick Hutchinson", "type": "influencer", "title": "Founder defining the new category of Asset Intelligence for the built environmen", "company": "Glider Technology", "followers": 8954, "connections": 2, "sources": "Engineering"}, {"id": "Nirmal Tiwari", "display": "Nirmal Tiwari", "type": "influencer", "title": "Mentor, Advisor in Ground Engineering and a  Lifetime Achievement Award winner a", "company": "The Federation of Piling Specialists", "followers": 3808, "connections": 3, "sources": "Engineering"}, {"id": "Noel Travers", "display": "Noel Travers", "type": "influencer", "title": "Chief Executive Officer of Buckland Rail and Chair of the Railway Industry Assoc", "company": "Buckland Rail", "followers": 6290, "connections": 2, "sources": "Data Centre & Transport"}, {"id": "Nyein Aye Wai PCQI", "display": "Nyein Aye Wai PCQI", "type": "influencer", "title": "Quality Assurance Engineer | Engineering Management | Quality Control Engineer |", "company": "Balfour Beatty plc", "followers": 257, "connections": 1, "sources": "Engineering"}, {"id": "Philip Marsh", "display": "Philip Marsh", "type": "influencer", "title": "52 years rail experience from junior clerk to Board level. Front line Ops, comme", "company": "EWR Alliance", "followers": 1529, "connections": 1, "sources": "Data Centre & Transport"}, {"id": "Philip Ramsay", "display": "Philip Ramsay", "type": "influencer", "title": "Operations Director at Kier Group", "company": "Kier Group", "followers": 1794, "connections": 1, "sources": "Engineering"}, {"id": "Richard Ludwig, ACA", "display": "Richard Ludwig, ACA", "type": "influencer", "title": "Director in Investment Banking. Sector focus Digital Infrastructure M&A and fina", "company": "Alantra", "followers": 5371, "connections": 1, "sources": "Data Centre & Transport"}, {"id": "Ruth Busby OBE", "display": "Ruth Busby OBE", "type": "influencer", "title": "People Director GTR (Govia Thameslink Railway), NED at Youth Futures Foundation\n", "company": "GTR (Govia Thameslink Railway)", "followers": 3624, "connections": 4, "sources": "Data Centre & Transport"}, {"id": "Sam Turner (she/her)", "display": "Sam Turner (she/her)", "type": "influencer", "title": "Finance Director for the SWR\u2013Network Rail Integrated Railway, with responsibilit", "company": "South Western Railway", "followers": 1584, "connections": 3, "sources": "Data Centre & Transport"}, {"id": "Sean Maguire", "display": "Sean Maguire", "type": "influencer", "title": "Senior Vice President & Global Head, Data Center Strategy", "company": "Black Box", "followers": 10060, "connections": 1, "sources": "Data Centre & Transport"}, {"id": "Steve Hall", "display": "Steve Hall", "type": "influencer", "title": "Bid Director - Kier Transportation", "company": "Kier Group", "followers": 1388, "connections": 1, "sources": "Engineering"}, {"id": "Steve White", "display": "Steve White", "type": "influencer", "title": "Managing Director at South Eastern Railway", "company": "South Eastern Railway", "followers": 6354, "connections": 2, "sources": "Data Centre & Transport"}, {"id": "Tracey Collins", "display": "Tracey Collins", "type": "influencer", "title": "Director of Sustainability at Kier", "company": "Kier Group", "followers": 5052, "connections": 1, "sources": "Engineering"}, {"id": "Arup", "display": "Arup", "type": "dm", "title": "Company Page", "connections": 2, "sector": ""}, {"id": "Global Switch", "display": "Global Switch", "type": "dm", "title": "Company Page", "connections": 1, "sector": ""}, {"id": "Doug Adams", "display": "Doug Adams", "type": "dm", "title": "Company Page", "connections": 1, "sector": ""}, {"id": "Diarmuid wilson", "display": "Diarmuid wilson", "type": "dm", "title": "Company Page", "connections": 1, "sector": ""}, {"id": "Pure Data Centres Group", "display": "Pure Data Centres Group", "type": "dm", "title": "Company Page", "connections": 1, "sector": ""}, {"id": "Laing O'Rourke", "display": "Laing O'Rourke", "type": "dm", "title": "Company Page", "connections": 1, "sector": ""}, {"id": "Andy Power", "display": "Andy Power", "type": "dm", "title": "Company Page", "connections": 2, "sector": ""}, {"id": "Jeremy Westlake", "display": "Jeremy Westlake", "type": "dm", "title": "Company Page", "connections": 1, "sector": ""}], "edges": [{"source": "Jonathan Hill", "target": "Tufan Erginbilgic", "direction": "inf_to_dm", "weight": 3, "bidirectional": false}, {"source": "Michael Tobin CBE", "target": "Rob Coupland", "direction": "inf_to_dm", "weight": 3, "bidirectional": false}, {"source": "Neal Morris", "target": "Stuart Togwell", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Melanie Manton - Infrastructure", "target": "Alex Vaughan", "direction": "inf_to_dm", "weight": 2, "bidirectional": false}, {"source": "Melanie Manton - Infrastructure", "target": "Jonathan Willcock", "direction": "inf_to_dm", "weight": 2, "bidirectional": false}, {"source": "Melanie Manton - Infrastructure", "target": "Jerome Frost", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Chris Fox", "target": "Bruce Owen", "direction": "inf_to_dm", "weight": 2, "bidirectional": false}, {"source": "Philip Ramsay", "target": "Matthew Lester", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Nick Hutchinson", "target": "Cathal O'Rourke", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Nick Hutchinson", "target": "Stuart Togwell", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Noel Travers", "target": "Sir Andrew Haines OBE", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Noel Travers", "target": "Mark Killick", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Andy Kitson", "target": "Mark Killick", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Ffion Jones", "target": "Stuart Togwell", "direction": "inf_to_dm", "weight": 2, "bidirectional": false}, {"source": "Sue Kershaw", "target": "Jerome Frost", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Sue Kershaw", "target": "Ellie Burrows (FCIRO)", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Christian Moffatt", "target": "Alex Vaughan", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Philip Marsh", "target": "Sir Andrew Haines OBE", "direction": "inf_to_dm", "weight": 2, "bidirectional": false}, {"source": "Richard Ludwig, ACA", "target": "Rob Coupland", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Hitesh Kumar", "target": "Harmeen Mehta", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Sam Turner (she/her)", "target": "Mark Killick", "direction": "inf_to_dm", "weight": 1, "bidirectional": true}, {"source": "Mark Killick", "target": "Sam Turner (she/her)", "direction": "dm_to_inf", "weight": 1, "bidirectional": true}, {"source": "Ellie Burrows (FCIRO)", "target": "Sam Turner (she/her)", "direction": "dm_to_inf", "weight": 1, "bidirectional": false}, {"source": "Dr Mark Fletcher FREng", "target": "Alex Vaughan", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Dr Mark Fletcher FREng", "target": "Jerome Frost", "direction": "inf_to_dm", "weight": 4, "bidirectional": false}, {"source": "Sean Maguire", "target": "Doug Adams", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Jacqui Allen", "target": "Jonathan Willcock", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Doug Green", "target": "Sir Andrew Haines OBE", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Doug Green", "target": "Mark Killick", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Tracey Collins", "target": "Stuart Togwell", "direction": "inf_to_dm", "weight": 3, "bidirectional": false}, {"source": "Amel Steel", "target": "Dame Dawn Childs DBE FREng", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Amel Steel", "target": "Bruce Owen", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Mukta Hashmi", "target": "Philip Hoare", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Deena A.", "target": "Sir Andrew Haines OBE", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Deena A.", "target": "Ellie Burrows (FCIRO)", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Dave Wright     FCIHT , MICW", "target": "Philip Hoare", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Nyein Aye Wai PCQI", "target": "Philip Hoare", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Driss Joaquim Costa", "target": "Global Switch", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Ana Franco", "target": "Andy Power", "direction": "inf_to_dm", "weight": 2, "bidirectional": false}, {"source": "Adam Nethersole", "target": "David Bloom", "direction": "inf_to_dm", "weight": 2, "bidirectional": true}, {"source": "Adam Nethersole", "target": "Clinton Hasell", "direction": "inf_to_dm", "weight": 2, "bidirectional": false}, {"source": "David Bloom", "target": "Adam Nethersole", "direction": "dm_to_inf", "weight": 1, "bidirectional": true}, {"source": "Matthew Game ChPP MAPM RPP", "target": "Mark Thurston", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Helen Andreou", "target": "Sir Andrew Haines OBE", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Jon Clark", "target": "Alex Vaughan", "direction": "inf_to_dm", "weight": 2, "bidirectional": true}, {"source": "Alex Vaughan", "target": "Jon Clark", "direction": "dm_to_inf", "weight": 4, "bidirectional": true}, {"source": "Chris Sexton", "target": "Laing O'Rourke", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Hatim M.", "target": "Jerome Frost", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Muhammad Khan", "target": "Pure Data Centres Group", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Bradley Warren", "target": "Ian Whitfield", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Bradley Warren", "target": "Diarmuid wilson", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Bradley Warren", "target": "Andy Power", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Conor Grogan\ud83d\udc77\u200d\u2642\ufe0f", "target": "Ellie Burrows (FCIRO)", "direction": "inf_to_dm", "weight": 2, "bidirectional": false}, {"source": "Steve Hall", "target": "Stuart Togwell", "direction": "inf_to_dm", "weight": 2, "bidirectional": false}, {"source": "Chris Pike", "target": "Sir Andrew Haines OBE", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Melanie Page", "target": "Jon Ozanne", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Geoff Hunt CEng FICE MIStructE", "target": "Arup", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Geoff Hunt CEng FICE MIStructE", "target": "Rob G.", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Nadia V. Gil", "target": "Justin Dustzadeh", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Emma Osborn", "target": "Mark Killick", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Clive Berrington", "target": "Emma Osborn", "direction": "dm_to_inf", "weight": 1, "bidirectional": false}, {"source": "David Kellett", "target": "Alex Vaughan", "direction": "inf_to_dm", "weight": 2, "bidirectional": false}, {"source": "David Kellett", "target": "Philip Hoare", "direction": "inf_to_dm", "weight": 2, "bidirectional": false}, {"source": "Ruth Busby OBE", "target": "Mark Killick", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Ruth Busby OBE", "target": "Jeremy Westlake", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Ruth Busby OBE", "target": "Ellie Burrows (FCIRO)", "direction": "inf_to_dm", "weight": 1, "bidirectional": true}, {"source": "Ellie Burrows (FCIRO)", "target": "Ruth Busby OBE", "direction": "dm_to_inf", "weight": 2, "bidirectional": true}, {"source": "Ken Foster", "target": "Philip Hoare", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Ken Foster", "target": "Sir Andrew Haines OBE", "direction": "inf_to_dm", "weight": 3, "bidirectional": false}, {"source": "Ken Foster", "target": "Mark Thurston", "direction": "inf_to_dm", "weight": 3, "bidirectional": false}, {"source": "Nirmal Tiwari", "target": "Philip Hoare", "direction": "inf_to_dm", "weight": 3, "bidirectional": false}, {"source": "Nirmal Tiwari", "target": "Arup", "direction": "inf_to_dm", "weight": 2, "bidirectional": false}, {"source": "Nirmal Tiwari", "target": "Jerome Frost", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Steve White", "target": "Dave Hooper BSc CDir FIoD", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}, {"source": "Steve White", "target": "Mark Killick", "direction": "inf_to_dm", "weight": 1, "bidirectional": false}]};
+
+const width = window.innerWidth, height = window.innerHeight;
+const svg = d3.select("#network").attr("width", width).attr("height", height);
+const defs = svg.append("defs");
+
+// Grid bg
+const pat = defs.append("pattern").attr("id","grid").attr("width",50).attr("height",50).attr("patternUnits","userSpaceOnUse");
+pat.append("circle").attr("cx",25).attr("cy",25).attr("r",.4).attr("fill","rgba(100,116,139,.08)");
+svg.append("rect").attr("width",width).attr("height",height).attr("fill","url(#grid)");
+
+// Glows
+["glow-dm","glow-inf","glow-cross"].forEach((id,i) => {
+  const f = defs.append("filter").attr("id",id);
+  f.append("feGaussianBlur").attr("stdDeviation",[4,3,3.5][i]).attr("result","b");
+  f.append("feComposite").attr("in","SourceGraphic").attr("in2","b").attr("operator","over");
+});
+
+// Arrows
+[["arr-def","rgba(100,116,139,.3)"],["arr-bidir","rgba(52,211,153,.45)"],["arr-hi","rgba(251,191,36,.7)"]].forEach(([id,col]) => {
+  defs.append("marker").attr("id",id).attr("viewBox","0 0 10 6").attr("refX",10).attr("refY",3)
+    .attr("markerWidth",7).attr("markerHeight",4.5).attr("orient","auto")
+    .append("path").attr("d","M0,0 L10,3 L0,6 L2,3 Z").attr("fill",col);
+});
+
+const nodes = DATA.nodes.map(d => ({...d}));
+const edges = DATA.edges.map(d => ({...d}));
+
+// Sizing
+const dmR = 24, infBase = 9, infMax = 18;
+const maxC = d3.max(nodes.filter(n=>n.type==='influencer'), n=>n.connections)||3;
+const sc = d3.scaleSqrt().domain([0,maxC]).range([infBase,infMax]);
+nodes.forEach(n => { n.radius = n.type==='dm' ? dmR : sc(n.connections); });
+
+// Colors
+function nodeColor(d) {
+  if (d.type === 'dm') {
+    if ((d.sector||'').includes('DC') || (d.sector||'').includes('Transport')) return '#A78BFA';
+    return '#F59E0B';
+  }
+  if ((d.sources||'').includes('+')) return '#14B8A6';
+  if ((d.sources||'').includes('DC')) return '#818CF8';
+  return '#3B82F6';
+}
+function nodeGlow(d) {
+  if (d.type === 'dm') return 'url(#glow-dm)';
+  if ((d.sources||'').includes('+')) return 'url(#glow-cross)';
+  return d.connections >= 2 ? 'url(#glow-inf)' : null;
+}
+
+// Force sim
+const simulation = d3.forceSimulation(nodes)
+  .force("link", d3.forceLink(edges).id(d=>d.id).distance(d => d.bidirectional ? 120 : 160).strength(d => d.bidirectional ? .35 : .15))
+  .force("charge", d3.forceManyBody().strength(d => d.type==='dm' ? -500 : -150))
+  .force("center", d3.forceCenter(width/2, height/2))
+  .force("collision", d3.forceCollide().radius(d => d.radius + 14))
+  .force("x", d3.forceX(width/2).strength(.025))
+  .force("y", d3.forceY(height/2).strength(.025));
+
+const container = svg.append("g");
+svg.call(d3.zoom().scaleExtent([.25,3.5]).on("zoom", e => container.attr("transform", e.transform)));
+
+// Edges
+const linkG = container.append("g");
+const link = linkG.selectAll("line").data(edges).join("line")
+  .attr("stroke", d => d.bidirectional ? "rgba(52,211,153,.3)" : "rgba(100,116,139,.12)")
+  .attr("stroke-width", d => d.bidirectional ? 2.5 : Math.min(d.weight*.7+.5, 2.5))
+  .attr("stroke-dasharray", d => d.bidirectional ? "none" : "4,4")
+  .attr("marker-end", d => d.bidirectional ? "url(#arr-bidir)" : "url(#arr-def)");
+
+// Nodes
+const nodeG = container.append("g");
+const node = nodeG.selectAll("g").data(nodes).join("g").attr("class","node")
+  .call(d3.drag().on("start",(e,d)=>{if(!e.active)simulation.alphaTarget(.3).restart();d.fx=d.x;d.fy=d.y})
+    .on("drag",(e,d)=>{d.fx=e.x;d.fy=e.y}).on("end",(e,d)=>{if(!e.active)simulation.alphaTarget(0);d.fx=null;d.fy=null}));
+
+// Outer circle
+node.append("circle").attr("r", d=>d.radius)
+  .attr("fill", d => {const c=nodeColor(d); return d.type==='dm' ? c.replace(')',', .1)').replace('rgb','rgba') : c.replace(')',', .12)').replace('rgb','rgba')})
+  .attr("stroke", nodeColor).attr("stroke-width", d=>d.type==='dm'?1.8:1.2)
+  .attr("filter", nodeGlow);
+
+// Inner ring for DMs
+node.filter(d=>d.type==='dm').append("circle").attr("r",d=>d.radius-3.5)
+  .attr("fill","none").attr("stroke",d=>nodeColor(d)).attr("stroke-width",.4).attr("opacity",.3);
+
+// DM initials
+node.filter(d=>d.type==='dm').append("text").attr("class","node-label")
+  .attr("text-anchor","middle").attr("dy","3.5px")
+  .attr("fill",nodeColor).attr("font-size","10px").attr("font-weight","700")
+  .attr("font-family","'IBM Plex Mono',monospace")
+  .text(d=>{const p=(d.display||d.id).replace(/\(.*?\)/g,'').trim().split(/\s+/);return p.length>=2?p[0][0]+p[p.length-1][0]:p[0].substring(0,2)});
+
+// Labels
+node.append("text").attr("class","node-label").attr("text-anchor","middle")
+  .attr("dy", d=>d.radius + (d.type==='dm'?14:11))
+  .attr("fill", d=>d.type==='dm'? nodeColor(d) : "#94A3B8")
+  .attr("font-size", d=>d.type==='dm'?"10px":"9px")
+  .attr("font-weight", d=>d.type==='dm'?"600":"400")
+  .attr("letter-spacing", d=>d.type==='dm'?".2px":"0")
+  .text(d => {
+    let name = d.display||d.id;
+    // Clean up long suffixed names
+    name = name.replace(/\s+(CEng|FREng|FICE|MIStructE|BEng|MRICS|MCMI|ChMc|MCInstCES|PCQI|FCIHT|MICW|FCIRO|DBE|OBE|ChPP|MAPM|RPP|ACA).*/,'');
+    name = name.replace(/\s*\(.*?\)\s*/g,' ').trim();
+    name = name.replace('👷‍♂️','').trim();
+    if(name.length>22) name = name.substring(0,20)+'…';
+    return name;
+  });
+
+// Tooltip + hover
+const tooltip = d3.select("#tooltip");
+
+node.on("mouseover", function(event, d) {
+  d3.select(this).select("circle").transition().duration(150).attr("stroke-width",d.type==='dm'?3:2.5);
+
+  const connIds = new Set([d.id]);
+  edges.forEach(e => {
+    const s = typeof e.source==='object'?e.source.id:e.source;
+    const t = typeof e.target==='object'?e.target.id:e.target;
+    if(s===d.id) connIds.add(t);
+    if(t===d.id) connIds.add(s);
+  });
+
+  link.transition().duration(150)
+    .attr("stroke", e=>{
+      const s=typeof e.source==='object'?e.source.id:e.source;
+      const t=typeof e.target==='object'?e.target.id:e.target;
+      if(s===d.id||t===d.id) return e.bidirectional?"rgba(52,211,153,.65)":"rgba(251,191,36,.45)";
+      return "rgba(100,116,139,.03)";
+    })
+    .attr("stroke-width", e=>{
+      const s=typeof e.source==='object'?e.source.id:e.source;
+      const t=typeof e.target==='object'?e.target.id:e.target;
+      if(s===d.id||t===d.id) return e.bidirectional?3:2;
+      return .3;
+    })
+    .attr("marker-end", e=>{
+      const s=typeof e.source==='object'?e.source.id:e.source;
+      const t=typeof e.target==='object'?e.target.id:e.target;
+      if(s===d.id||t===d.id) return e.bidirectional?"url(#arr-bidir)":"url(#arr-hi)";
+      return "";
+    });
+
+  nodeG.selectAll(".node").transition().duration(150).attr("opacity",n=>connIds.has(n.id)?1:.1);
+
+  let html=`<div class="tt-name">${d.display||d.id}</div><div class="tt-role">${d.title||d.company||''}</div>`;
+  if(d.type==='dm') html+=`<div class="tt-stat"><span>${d.connections}</span> influencer connections</div>`;
+  else {
+    html+=`<div class="tt-stat"><span>${d.connections}</span> DM connections</div>`;
+    if(d.followers) html+=`<div class="tt-stat"><span>${d.followers.toLocaleString()}</span> followers</div>`;
+    if(d.sources) html+=`<div class="tt-stat">Source: <span>${d.sources}</span></div>`;
+  }
+  const bEdges = edges.filter(e=>{
+    const s=typeof e.source==='object'?e.source.id:e.source;
+    const t=typeof e.target==='object'?e.target.id:e.target;
+    return (s===d.id||t===d.id) && e.bidirectional;
+  });
+  if(bEdges.length) html+=`<div class="tt-bidir">↔ ${bEdges.length} bidirectional</div>`;
+
+  tooltip.html(html).style("left",(event.pageX+14)+"px").style("top",(event.pageY-8)+"px").classed("visible",true);
+})
+.on("mousemove", e => tooltip.style("left",(e.pageX+14)+"px").style("top",(e.pageY-8)+"px"))
+.on("mouseout", function(event,d) {
+  d3.select(this).select("circle").transition().duration(250).attr("stroke-width",d.type==='dm'?1.8:1.2);
+  link.transition().duration(250)
+    .attr("stroke",e=>e.bidirectional?"rgba(52,211,153,.3)":"rgba(100,116,139,.12)")
+    .attr("stroke-width",e=>e.bidirectional?2.5:Math.min(e.weight*.7+.5,2.5))
+    .attr("marker-end",e=>e.bidirectional?"url(#arr-bidir)":"url(#arr-def)");
+  nodeG.selectAll(".node").transition().duration(250).attr("opacity",1);
+  tooltip.classed("visible",false);
+})
+.on("click", function(event,d) {
+  const panel = d3.select("#info-panel");
+  const connEdges = edges.filter(e=>{
+    const s=typeof e.source==='object'?e.source.id:e.source;
+    const t=typeof e.target==='object'?e.target.id:e.target;
+    return s===d.id||t===d.id;
+  });
+  let html=`<div class="ip-name">${d.display||d.id}</div><div class="ip-role">${d.title||''}</div>`;
+  
+  const outbound = connEdges.filter(e=>(typeof e.source==='object'?e.source.id:e.source)===d.id);
+  const inbound = connEdges.filter(e=>(typeof e.target==='object'?e.target.id:e.target)===d.id);
+  
+  if(outbound.length){
+    html+=`<div class="ip-section">Comments on (${outbound.length})</div>`;
+    outbound.forEach(e=>{
+      const t=typeof e.target==='object'?e.target.id:e.target;
+      const tn=nodes.find(n=>n.id===t);
+      const col=tn&&tn.type==='dm'?'#FBBF24':'#60A5FA';
+      html+=`<div class="ip-conn-item"><div class="ip-conn-dot" style="background:${col}"></div><span class="ip-conn-arrow">→</span><span>${t}${e.bidirectional?'<span class="ip-bidir-tag">↔ mutual</span>':''}</span></div>`;
+    });
+  }
+  if(inbound.length){
+    html+=`<div class="ip-section">Receives from (${inbound.length})</div>`;
+    inbound.forEach(e=>{
+      const s=typeof e.source==='object'?e.source.id:e.source;
+      const sn=nodes.find(n=>n.id===s);
+      const col=sn&&sn.type==='dm'?'#FBBF24':'#60A5FA';
+      html+=`<div class="ip-conn-item"><div class="ip-conn-dot" style="background:${col}"></div><span class="ip-conn-arrow">←</span><span>${s}${e.bidirectional?'<span class="ip-bidir-tag">↔ mutual</span>':''}</span></div>`;
+    });
+  }
+  d3.select("#info-content").html(html);
+  panel.classed("visible",true);
+});
+
+d3.select("#info-close").on("click",()=>d3.select("#info-panel").classed("visible",false));
+
+// Sector filter
+window.filterSector = function(sector) {
+  document.querySelectorAll('.ctrl-btn').forEach(b=>b.classList.remove('active'));
+  event.target.classList.add('active');
+
+  if(sector==='all'){
+    nodeG.selectAll(".node").transition().duration(300).attr("opacity",1);
+    link.transition().duration(300).attr("opacity",1);
+    return;
+  }
+
+  const matchDM = n => {
+    if(sector==='eng') return (n.sector||'').includes('Engineering');
+    if(sector==='dc') return (n.sector||'').includes('DC') || (n.sector||'').includes('Transport');
+    if(sector==='cross') return (n.sector||'').includes('+');
+    return true;
+  };
+  const matchInf = n => {
+    if(sector==='eng') return (n.sources||'').includes('Engineering');
+    if(sector==='dc') return (n.sources||'').includes('DC');
+    if(sector==='cross') return (n.sources||'').includes('+');
+    return true;
+  };
+
+  const activeIds = new Set();
+  nodes.forEach(n => {
+    if(n.type==='dm' && matchDM(n)) activeIds.add(n.id);
+    if(n.type==='influencer' && matchInf(n)) activeIds.add(n.id);
+  });
+  // Also include connected DMs for matched influencers
+  edges.forEach(e=>{
+    const s=typeof e.source==='object'?e.source.id:e.source;
+    const t=typeof e.target==='object'?e.target.id:e.target;
+    if(activeIds.has(s)) activeIds.add(t);
+    if(activeIds.has(t)) activeIds.add(s);
+  });
+
+  nodeG.selectAll(".node").transition().duration(300).attr("opacity",n=>activeIds.has(n.id)?1:.06);
+  link.transition().duration(300).attr("opacity",e=>{
+    const s=typeof e.source==='object'?e.source.id:e.source;
+    const t=typeof e.target==='object'?e.target.id:e.target;
+    return activeIds.has(s)&&activeIds.has(t)?1:.03;
+  });
+};
+
+// Tick
+simulation.on("tick",()=>{
+  link.attr("x1",d=>d.source.x).attr("y1",d=>d.source.y)
+    .attr("x2",d=>{const dx=d.target.x-d.source.x,dy=d.target.y-d.source.y,dist=Math.sqrt(dx*dx+dy*dy),r=d.target.radius||10;return d.target.x-(dx/dist)*(r+5)})
+    .attr("y2",d=>{const dx=d.target.x-d.source.x,dy=d.target.y-d.source.y,dist=Math.sqrt(dx*dx+dy*dy),r=d.target.radius||10;return d.target.y-(dy/dist)*(r+5)});
+  node.attr("transform",d=>`translate(${d.x},${d.y})`);
+});
+
+// Auto-fit after settling
+setTimeout(()=>{
+  const b=container.node().getBBox();
+  const s=Math.min(width/(b.width+150),height/(b.height+150),1.15);
+  const tx=width/2-s*(b.x+b.width/2), ty=height/2-s*(b.y+b.height/2);
+  svg.transition().duration(1200).call(d3.zoom().scaleExtent([.25,3.5]).on("zoom",e=>container.attr("transform",e.transform)).transform, d3.zoomIdentity.translate(tx,ty).scale(s));
+},2800);
+</script>
+</body>
+</html>
